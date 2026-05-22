@@ -21,6 +21,7 @@ import {
   Plus,
   QrCode,
   ReceiptText,
+  RotateCw,
   RotateCcw,
   Settings2,
   Shuffle,
@@ -120,6 +121,16 @@ type RiichiPayload = {
   note: string;
 };
 
+type WinScoreKind = "multiplier" | "bonus" | "unitBonus" | "han";
+
+type WinScoreOption = {
+  id: string;
+  label: string;
+  detail: string;
+  kind: WinScoreKind;
+  value: number;
+};
+
 const STORAGE_KEY = "que-zhang-tai-state-v1";
 const DEVICE_PLAYER_KEY = "que-zhang-tai-device-player-v1";
 const SEATS = ["东", "南", "西", "北"];
@@ -188,6 +199,63 @@ const profileMap = Object.fromEntries(
   PROFILES.map((profile) => [profile.id, profile]),
 ) as Record<VariantId, ProfileDefinition>;
 
+const WIN_SCORE_OPTIONS: Record<VariantId, WinScoreOption[]> = {
+  nanjing: [
+    { id: "menqing", label: "门清", detail: "+20花", kind: "bonus", value: 20 },
+    { id: "duiduihu", label: "对对胡", detail: "+40花", kind: "bonus", value: 40 },
+    { id: "hunyi", label: "混一色", detail: "+40花", kind: "bonus", value: 40 },
+    { id: "qingyi", label: "清一色", detail: "+60花", kind: "bonus", value: 60 },
+    { id: "qidui", label: "七对", detail: "+40花", kind: "bonus", value: 40 },
+    { id: "quanqiu", label: "全球独钓", detail: "+60花", kind: "bonus", value: 60 },
+    { id: "gangkai", label: "杠后开花", detail: "+20花", kind: "bonus", value: 20 },
+    { id: "qianggang", label: "抢杠胡", detail: "+20花", kind: "bonus", value: 20 },
+  ],
+  riichi: [
+    { id: "riichi", label: "立直", detail: "1番", kind: "han", value: 1 },
+    { id: "tanyao", label: "断幺九", detail: "1番", kind: "han", value: 1 },
+    { id: "pinfu", label: "平和", detail: "1番", kind: "han", value: 1 },
+    { id: "menzen-tsumo", label: "门前清自摸", detail: "1番", kind: "han", value: 1 },
+    { id: "ippatsu", label: "一发", detail: "1番", kind: "han", value: 1 },
+    { id: "yakuhai", label: "役牌", detail: "1番", kind: "han", value: 1 },
+    { id: "rinshan", label: "岭上开花", detail: "1番", kind: "han", value: 1 },
+    { id: "chankan", label: "抢杠", detail: "1番", kind: "han", value: 1 },
+    { id: "toitoi", label: "对对和", detail: "2番", kind: "han", value: 2 },
+    { id: "chiitoi", label: "七对子", detail: "2番", kind: "han", value: 2 },
+    { id: "honitsu", label: "混一色", detail: "2-3番", kind: "han", value: 2 },
+    { id: "chinitsu", label: "清一色", detail: "5-6番", kind: "han", value: 5 },
+  ],
+  qiaoma: [
+    { id: "duiduihu", label: "对对胡", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "qingyi", label: "清一色", detail: "x4", kind: "multiplier", value: 4 },
+    { id: "qidui", label: "七对", detail: "x4", kind: "multiplier", value: 4 },
+    { id: "menqing", label: "门清", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "gangkai", label: "杠上花", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "qianggang", label: "抢杠胡", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "minggang", label: "明杠", detail: "+2底", kind: "unitBonus", value: 2 },
+    { id: "angang", label: "暗杠", detail: "+4底", kind: "unitBonus", value: 4 },
+  ],
+  sichuan: [
+    { id: "duiduihu", label: "对对胡", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "qingyi", label: "清一色", detail: "x4", kind: "multiplier", value: 4 },
+    { id: "qidui", label: "七对", detail: "x4", kind: "multiplier", value: 4 },
+    { id: "qingdui", label: "清对", detail: "x16", kind: "multiplier", value: 16 },
+    { id: "longqidui", label: "龙七对", detail: "x8", kind: "multiplier", value: 8 },
+    { id: "gangkai", label: "杠上花", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "qianggang", label: "抢杠胡", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "haidi", label: "海底捞月", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "guafeng", label: "刮风", detail: "+2底", kind: "unitBonus", value: 2 },
+    { id: "xiayu", label: "下雨", detail: "+2底", kind: "unitBonus", value: 2 },
+  ],
+  custom: [
+    { id: "duiduihu", label: "对对胡", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "qingyi", label: "清一色", detail: "x4", kind: "multiplier", value: 4 },
+    { id: "qidui", label: "七对", detail: "x4", kind: "multiplier", value: 4 },
+    { id: "gangkai", label: "杠上花", detail: "x2", kind: "multiplier", value: 2 },
+    { id: "minggang", label: "明杠", detail: "+2底", kind: "unitBonus", value: 2 },
+    { id: "angang", label: "暗杠", detail: "+4底", kind: "unitBonus", value: 4 },
+  ],
+};
+
 function uid() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -208,6 +276,48 @@ function formatScore(value: number) {
 function formatDelta(value: number) {
   if (value === 0) return "0";
   return `${value > 0 ? "+" : ""}${formatScore(value)}`;
+}
+
+function getWinOptions(profileId: VariantId) {
+  return WIN_SCORE_OPTIONS[profileId] ?? WIN_SCORE_OPTIONS.custom;
+}
+
+function calculateWinScore(
+  profile: ProfileDefinition,
+  selectedOptionIds: string[],
+  base: number,
+  manualBonus: number,
+) {
+  const selectedOptions = getWinOptions(profile.id).filter((option) =>
+    selectedOptionIds.includes(option.id),
+  );
+  const han = selectedOptions
+    .filter((option) => option.kind === "han")
+    .reduce((sum, option) => sum + option.value, 0);
+  const optionMultiplier = selectedOptions
+    .filter((option) => option.kind === "multiplier")
+    .reduce((product, option) => product * option.value, 1);
+  const hanMultiplier = han > 0 ? 2 ** han : 1;
+  const cappedMultiplier =
+    profile.id === "sichuan"
+      ? Math.min(optionMultiplier * hanMultiplier, 16)
+      : optionMultiplier * hanMultiplier;
+  const flatBonus = selectedOptions
+    .filter((option) => option.kind === "bonus")
+    .reduce((sum, option) => sum + option.value, 0);
+  const unitBonus = selectedOptions
+    .filter((option) => option.kind === "unitBonus")
+    .reduce((sum, option) => sum + option.value * base, 0);
+  const amount = Math.max(0, base * cappedMultiplier + flatBonus + unitBonus + manualBonus);
+
+  return {
+    amount,
+    flatBonus,
+    han,
+    multiplier: cappedMultiplier,
+    selectedOptions,
+    unitBonus,
+  };
 }
 
 function formatDateTime(value: string) {
@@ -251,13 +361,53 @@ function getPlayer(table: TableState, playerId: string) {
   return table.players.find((player) => player.id === playerId) ?? table.players[0];
 }
 
+function getPlayerBySeat(table: TableState, seat: string) {
+  return table.players.find((player) => player.seat === seat) ?? table.players[0];
+}
+
 function getNextDealerId(table: TableState) {
-  const dealerId = table.currentDealerId ?? table.players[0]?.id;
-  const currentIndex = Math.max(
-    0,
-    table.players.findIndex((player) => player.id === dealerId),
+  const dealer = getPlayer(
+    table,
+    table.currentDealerId ?? getPlayerBySeat(table, "东")?.id ?? "",
   );
-  return table.players[(currentIndex + 1) % table.players.length]?.id;
+  const currentSeatIndex = Math.max(0, SEATS.indexOf(dealer?.seat ?? "东"));
+  const nextSeat = SEATS[(currentSeatIndex + 1) % SEATS.length];
+  return getPlayerBySeat(table, nextSeat)?.id ?? table.players[0]?.id;
+}
+
+function rotateVisualSeatsClockwise(seats: string[]) {
+  return seats.map((_, index) => seats[(index - 1 + seats.length) % seats.length]);
+}
+
+function getLobbySeats(rotation: number) {
+  return Array.from({ length: rotation }).reduce<string[]>(
+    (current) => rotateVisualSeatsClockwise(current),
+    SEATS,
+  );
+}
+
+function rotateTableSeatsClockwise(table: TableState): TableState {
+  const currentSeats = table.players.map((player) => player.seat);
+  const nextSeats = rotateVisualSeatsClockwise(currentSeats);
+  const nextPlayers = table.players.map((player, index) => {
+    const nextSeat = nextSeats[index] ?? player.seat;
+    const hasDefaultSeatName =
+      DEFAULT_NAMES.includes(player.name) || player.name === `${player.seat}家`;
+
+    return {
+      ...player,
+      name: hasDefaultSeatName ? `${nextSeat}家` : player.name,
+      seat: nextSeat,
+    };
+  });
+  const eastPlayer = nextPlayers.find((player) => player.seat === "东") ?? nextPlayers[0];
+
+  return {
+    ...table,
+    updatedAt: new Date().toISOString(),
+    players: nextPlayers,
+    currentDealerId: eastPlayer?.id,
+  };
 }
 
 function loadStoredTable() {
@@ -790,6 +940,10 @@ export default function App() {
     });
   };
 
+  const rotateSeats = () => {
+    setTable((current) => (current ? rotateTableSeatsClockwise(current) : current));
+  };
+
   const changeHonba = (step: number) => {
     commit((current) => {
       const nextHonba = Math.max(0, current.honba + step);
@@ -836,7 +990,7 @@ export default function App() {
         riichiPot: 0,
         honba: 0,
         handNumber: 1,
-        currentDealerId: current.players[0]?.id,
+        currentDealerId: getPlayerBySeat(current, "东")?.id ?? current.players[0]?.id,
       };
     });
   };
@@ -866,7 +1020,13 @@ export default function App() {
         selectedPlayerId={selectedPlayerId}
         shareUrls={shareUrls}
         table={table}
+        onCommonWin={handleCommonWin}
+        onEndTable={endTable}
+        onManualEntry={handleManualEntry}
         onSelect={setSelectedPlayerId}
+        onRotateSeats={rotateSeats}
+        onSetDealer={setDealer}
+        onStart={setTable}
       />
     );
   }
@@ -940,6 +1100,7 @@ export default function App() {
             profile={profile}
             onReset={resetScores}
             onRotateDealer={rotateDealer}
+            onRotateSeats={rotateSeats}
             onSetDealer={setDealer}
           />
           <HistoryPanel table={table} onUndo={undoLast} />
@@ -1047,7 +1208,7 @@ function HostScreen({
             </div>
           </section>
 
-          <HostScoreWall table={table} latestEntryId={latestEntry?.id} />
+          <HostMahjongTable table={table} latestEntryId={latestEntry?.id} />
 
           <section className="host-event-banner" key={latestEntry?.id ?? "empty"}>
             {latestEntry ? (
@@ -1086,33 +1247,41 @@ function PlayerScreen({
   selectedPlayerId,
   shareUrls,
   table,
+  onCommonWin,
+  onEndTable,
+  onManualEntry,
   onSelect,
+  onRotateSeats,
+  onSetDealer,
+  onStart,
 }: {
   connection: ConnectionState;
   selectedPlayerId: string;
   shareUrls: string[];
   table: TableState | null;
+  onCommonWin: (payload: CommonWinPayload) => void;
+  onEndTable: () => void;
+  onManualEntry: (
+    label: string,
+    description: string,
+    deltas: Record<string, number>,
+    note?: string,
+  ) => void;
   onSelect: (playerId: string) => void;
+  onRotateSeats: () => void;
+  onSetDealer: (playerId: string) => void;
+  onStart: Dispatch<SetStateAction<TableState | null>>;
 }) {
   const playerUrl = withViewParam(shareUrls[0] ?? getBrowserOrigin(), "player");
 
   if (!table) {
     return (
-      <main className="player-screen waiting">
-        <section className="player-wait-card">
-          <div className="brand-block">
-            <span className="brand-mark">雀</span>
-            <div>
-              <div className="brand-title">雀账台</div>
-              <div className="brand-meta">个人记分页</div>
-            </div>
-          </div>
-          <ConnectionBadge connection={connection} />
-          <h1>等待总控开局</h1>
-          <p>开局后在这里选择自己，就能看到自己的分数和庄家状态。</p>
-          <code>{playerUrl.replace(/^https?:\/\//, "")}</code>
-        </section>
-      </main>
+      <PlayerLobbyScreen
+        connection={connection}
+        playerUrl={playerUrl}
+        onSelect={onSelect}
+        onStart={onStart}
+      />
     );
   }
 
@@ -1146,41 +1315,54 @@ function PlayerScreen({
         <ConnectionBadge connection={connection} />
       </header>
 
-      <section className="player-picker">
-        <label className="field-stack">
-          <span>我是谁</span>
-          <select
-            value={selectedPlayerId}
-            onChange={(event) => onSelect(event.target.value)}
-          >
-            <option value="">选择自己</option>
-            {table.players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
+      {!selectedPlayer && (
+        <section className="player-picker">
+          <label className="field-stack">
+            <span>我是谁</span>
+            <select
+              value={selectedPlayerId}
+              onChange={(event) => onSelect(event.target.value)}
+            >
+              <option value="">选择自己</option>
+              {table.players.map((player) => (
+                <option key={player.id} value={player.id}>
+                  {player.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+      )}
 
       {selectedPlayer ? (
         <>
-          <section className={`my-score-card ${isDealer ? "dealer" : ""}`}>
-            <div className="my-score-top">
-              <span>{selectedPlayer.seat}位</span>
-              <strong>{isDealer ? "我是庄" : `庄家 ${dealer.name}`}</strong>
-            </div>
-            <h1>{selectedPlayer.name}</h1>
-            <div className="my-score-number">{formatScore(score)}</div>
-            <div className="my-score-meta">
-              <span>第 {rank}</span>
-              <span className={delta >= 0 ? "positive-text" : "negative-text"}>
-                总变化 {formatDelta(delta)}
-              </span>
-              <span className={lastDelta >= 0 ? "positive-text" : "negative-text"}>
-                本手 {formatDelta(lastDelta)}
-              </span>
-            </div>
+          <section className="player-hero-layout">
+            <section className={`my-score-card ${isDealer ? "dealer" : ""}`}>
+              <div className="my-score-top">
+                <span>{selectedPlayer.seat}位</span>
+                <strong>{isDealer ? "我是庄" : `庄家 ${dealer.name}`}</strong>
+              </div>
+              <h1>{selectedPlayer.name}</h1>
+              <div className="my-score-number">{formatScore(score)}</div>
+              <div className="my-score-meta">
+                <span>第 {rank}</span>
+                <span className={delta >= 0 ? "positive-text" : "negative-text"}>
+                  总变化 {formatDelta(delta)}
+                </span>
+                <span className={lastDelta >= 0 ? "positive-text" : "negative-text"}>
+                  本手 {formatDelta(lastDelta)}
+                </span>
+              </div>
+            </section>
+
+            <PlayerMahjongTable
+              profile={profile}
+              selectedPlayerId={selectedPlayer.id}
+              table={table}
+              onWinSubmit={onCommonWin}
+              onSelect={onSelect}
+              onRotateSeats={onRotateSeats}
+            />
           </section>
 
           <section className="player-summary-grid">
@@ -1236,15 +1418,488 @@ function PlayerScreen({
               })
             )}
           </section>
+
+          <section className="player-action-stack">
+            <div className="section-heading">
+              <Settings2 size={18} />
+              <h2>更多操作</h2>
+            </div>
+
+            <GiveScoreForm
+              selectedPlayerId={selectedPlayer.id}
+              table={table}
+              onSubmit={onManualEntry}
+            />
+
+            <DealerQuickPanel
+              table={table}
+              onSetDealer={onSetDealer}
+            />
+
+            <div className="end-round-panel">
+              <button className="danger-action" onClick={onEndTable} type="button">
+                <RotateCcw size={18} />
+                结束当前对局
+              </button>
+            </div>
+          </section>
         </>
       ) : (
-        <section className="player-unselected">
-          <UserRound size={42} />
-          <h1>选择自己</h1>
-          <p>选完以后，这台手机只突出显示你的分数、排名和是不是庄。</p>
-        </section>
+        <>
+          <PlayerMahjongTable
+            table={table}
+            onSelect={onSelect}
+            onRotateSeats={onRotateSeats}
+          />
+          <section className="player-unselected">
+            <UserRound size={42} />
+            <h1>点座位进入</h1>
+            <p>选完以后，这台手机只突出显示你的分数、排名和是不是庄。</p>
+          </section>
+        </>
       )}
     </main>
+  );
+}
+
+function PlayerLobbyScreen({
+  connection,
+  playerUrl,
+  onSelect,
+  onStart,
+}: {
+  connection: ConnectionState;
+  playerUrl: string;
+  onSelect: (playerId: string) => void;
+  onStart: Dispatch<SetStateAction<TableState | null>>;
+}) {
+  const [profileId, setProfileId] = useState<VariantId>("nanjing");
+  const [seatRotation, setSeatRotation] = useState(0);
+  const profile = profileMap[profileId];
+  const lobbySeats = getLobbySeats(seatRotation);
+
+  const startAtSeat = (seatIndex: number) => {
+    const players = lobbySeats.map((seat, index) => ({
+      id: uid(),
+      name: `${seat}家`,
+      seat,
+      marker: MARKERS[index] ?? `${index + 1}`,
+    }));
+    const dealer = players.find((player) => player.seat === "东") ?? players[0];
+    const now = new Date().toISOString();
+    const table: TableState = {
+      id: uid(),
+      createdAt: now,
+      updatedAt: now,
+      profileId,
+      startingScore: profile.defaultStartingScore,
+      players,
+      scores: Object.fromEntries(
+        players.map((player) => [player.id, profile.defaultStartingScore]),
+      ),
+      ledger: [],
+      currentDealerId: dealer?.id,
+      honba: 0,
+      riichiPot: 0,
+      handNumber: 1,
+    };
+
+    onStart(table);
+    onSelect(players[seatIndex]?.id ?? players[0]?.id ?? "");
+  };
+
+  return (
+    <main className="player-screen lobby">
+      <header className="player-header">
+        <div className="brand-block">
+          <span className={`brand-mark tone-${profile.tone}`}>{profile.tile}</span>
+          <div>
+            <div className="brand-title">雀账台</div>
+            <div className="brand-meta">扫码入座</div>
+          </div>
+        </div>
+        <ConnectionBadge connection={connection} />
+      </header>
+
+      <section className="lobby-rules">
+        <h1>选择麻将</h1>
+        <div className="lobby-rule-grid">
+          {PROFILES.filter((item) => item.id !== "custom").map((item) => (
+            <button
+              className={`lobby-rule ${item.tone} ${
+                item.id === profileId ? "selected" : ""
+              }`}
+              key={item.id}
+              onClick={() => setProfileId(item.id)}
+              type="button"
+            >
+              <span className="profile-tile">{item.tile}</span>
+              <strong>{item.name}</strong>
+              <small>{item.chips.join(" / ")}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="lobby-table-section">
+        <div className="section-heading">
+          <Users size={18} />
+          <h2>选择座位</h2>
+          <button
+            className="icon-action small"
+            onClick={() => setSeatRotation((current) => (current + 1) % SEATS.length)}
+            title="东西南北顺时针转一位"
+            type="button"
+          >
+            <RotateCw size={16} />
+          </button>
+        </div>
+        <LobbyMahjongTable profile={profile} seats={lobbySeats} onSeat={startAtSeat} />
+      </section>
+
+      <section className="player-wait-card compact">
+        <span>当前链接</span>
+        <code>{playerUrl.replace(/^https?:\/\//, "")}</code>
+      </section>
+    </main>
+  );
+}
+
+function LobbyMahjongTable({
+  profile,
+  seats,
+  onSeat,
+}: {
+  profile: ProfileDefinition;
+  seats: string[];
+  onSeat: (seatIndex: number) => void;
+}) {
+  return (
+    <div className="mahjong-table-board lobby-board">
+      <div className="table-felt">
+        <strong>{profile.shortName}</strong>
+        <span>点击座位加入</span>
+      </div>
+      {seats.map((seat, index) => (
+        <button
+          className={`table-seat seat-${index}`}
+          key={`${seat}-${index}`}
+          onClick={() => onSeat(index)}
+          type="button"
+        >
+          <span>{seat}</span>
+          <strong>{seat}家</strong>
+          <em>{seat === "东" ? "默认庄" : "空位"}</em>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PlayerMahjongTable({
+  onRotateSeats,
+  onWinSubmit,
+  profile,
+  selectedPlayerId,
+  table,
+  onSelect,
+}: {
+  onRotateSeats?: () => void;
+  onWinSubmit?: (payload: CommonWinPayload) => void;
+  profile?: ProfileDefinition;
+  selectedPlayerId?: string;
+  table: TableState;
+  onSelect: (playerId: string) => void;
+}) {
+  const activeProfile = profile ?? profileMap[table.profileId];
+  const [winnerId, setWinnerId] = useState(selectedPlayerId ?? table.players[0]?.id ?? "");
+  const [method, setMethod] = useState<WinMethod>("discard");
+  const [payerId, setPayerId] = useState(
+    table.players.find((player) => player.id !== selectedPlayerId)?.id ??
+      table.players[1]?.id ??
+      "",
+  );
+  const [base, setBase] = useState(String(activeProfile.defaultUnit));
+  const [manualBonus, setManualBonus] = useState("0");
+  const [covered, setCovered] = useState(false);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
+  const [note, setNote] = useState("");
+  const canReportWin = Boolean(selectedPlayerId && onWinSubmit);
+  const validPayers = table.players.filter((player) => player.id !== winnerId);
+  const activePayerId =
+    validPayers.some((player) => player.id === payerId) && payerId !== winnerId
+      ? payerId
+      : validPayers[0]?.id;
+  const scorePreview = calculateWinScore(
+    activeProfile,
+    selectedOptionIds,
+    Math.max(0, toNumber(base, activeProfile.defaultUnit)),
+    toNumber(manualBonus, 0),
+  );
+
+  useEffect(() => {
+    if (!selectedPlayerId) return;
+    setWinnerId(selectedPlayerId);
+    setPayerId(
+      table.players.find((player) => player.id !== selectedPlayerId)?.id ??
+        table.players[0]?.id ??
+        "",
+    );
+  }, [selectedPlayerId, table.id, table.players]);
+
+  useEffect(() => {
+    setBase(String(activeProfile.defaultUnit));
+    setManualBonus("0");
+    setCovered(false);
+    setSelectedOptionIds([]);
+    setNote("");
+  }, [activeProfile.defaultUnit, activeProfile.id, table.id]);
+
+  const toggleOption = (optionId: string) => {
+    setSelectedOptionIds((current) =>
+      current.includes(optionId)
+        ? current.filter((item) => item !== optionId)
+        : [...current, optionId],
+    );
+  };
+
+  const reportWin = () => {
+    if (!onWinSubmit || !winnerId || scorePreview.amount <= 0) return;
+    const optionText = scorePreview.selectedOptions.map((option) => option.label).join("、");
+    const parts = [
+      optionText || "平胡",
+      scorePreview.han > 0 ? `${scorePreview.han}番` : "",
+      scorePreview.multiplier !== 1 ? `x${scorePreview.multiplier}` : "",
+      scorePreview.flatBonus ? `加${scorePreview.flatBonus}` : "",
+      scorePreview.unitBonus ? `杠/底加${scorePreview.unitBonus}` : "",
+    ].filter(Boolean);
+
+    onWinSubmit({
+      winnerId,
+      method,
+      payerId: activePayerId ?? winnerId,
+      amount: scorePreview.amount,
+      base: Math.max(0, toNumber(base, activeProfile.defaultUnit)),
+      multiplier: scorePreview.multiplier,
+      bonus: scorePreview.flatBonus + scorePreview.unitBonus + toNumber(manualBonus, 0),
+      covered,
+      note: [parts.join(" / "), note].filter(Boolean).join("；"),
+    });
+    setNote("");
+  };
+
+  return (
+    <section className="player-table-panel">
+      <div className="section-heading">
+        <Users size={18} />
+        <h2>麻将桌</h2>
+        {onRotateSeats && (
+          <button
+            className="icon-action small"
+            onClick={onRotateSeats}
+            title="东西南北顺时针转一位"
+            type="button"
+          >
+            <RotateCw size={16} />
+          </button>
+        )}
+      </div>
+      <div className="mahjong-table-board compact-board">
+        <div className="table-felt">
+          <strong>{profileMap[table.profileId].shortName}</strong>
+          <span>第 {table.handNumber} 局</span>
+        </div>
+        {table.players.map((player, index) => {
+          const score = table.scores[player.id] ?? 0;
+          const isDealer = player.id === table.currentDealerId;
+          const isSelected = player.id === selectedPlayerId;
+          const isWinner = player.id === winnerId;
+          const isPayer = method === "discard" && player.id === activePayerId;
+          return (
+            <article
+              className={`table-seat seat-${index} ${isSelected ? "selected" : ""} ${
+                isDealer ? "dealer" : ""
+              } ${isWinner ? "winner" : ""} ${isPayer ? "payer" : ""}`}
+              key={player.id}
+            >
+              <button
+                className="seat-main"
+                onClick={() => {
+                  if (canReportWin && method === "discard" && player.id !== winnerId) {
+                    setPayerId(player.id);
+                  } else {
+                    onSelect(player.id);
+                  }
+                }}
+                type="button"
+              >
+                <span>{player.seat}</span>
+                <strong>{player.name}</strong>
+                <em>{formatScore(score)}</em>
+                {isDealer && <b>庄</b>}
+              </button>
+              {canReportWin && (
+                <div className="seat-actions">
+                  <button
+                    className={`seat-mini-action ${isWinner ? "active" : ""}`}
+                    onClick={() => {
+                      setWinnerId(player.id);
+                      if (payerId === player.id) {
+                        setPayerId(
+                          table.players.find((item) => item.id !== player.id)?.id ?? "",
+                        );
+                      }
+                    }}
+                    type="button"
+                  >
+                    胡牌
+                  </button>
+                  {method === "discard" && player.id !== winnerId && (
+                    <button
+                      className={`seat-mini-action danger ${isPayer ? "active" : ""}`}
+                      onClick={() => setPayerId(player.id)}
+                      type="button"
+                    >
+                      点炮
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+      {canReportWin && (
+        <section className="table-win-panel">
+          <div className="win-panel-top">
+            <div>
+              <span>本手预估</span>
+              <strong>{formatScore(scorePreview.amount)}</strong>
+            </div>
+            <div className="segmented">
+              <button
+                className={method === "discard" ? "active" : ""}
+                onClick={() => setMethod("discard")}
+                type="button"
+              >
+                点炮
+              </button>
+              <button
+                className={method === "self" ? "active" : ""}
+                onClick={() => setMethod("self")}
+                type="button"
+              >
+                自摸
+              </button>
+            </div>
+          </div>
+
+          <div className="win-options-grid">
+            {getWinOptions(activeProfile.id).map((option) => (
+              <button
+                className={selectedOptionIds.includes(option.id) ? "selected" : ""}
+                key={option.id}
+                onClick={() => toggleOption(option.id)}
+                type="button"
+              >
+                <strong>{option.label}</strong>
+                <span>{option.detail}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="win-adjust-grid">
+            <label className="field-stack">
+              <span>底分</span>
+              <input
+                inputMode="decimal"
+                value={base}
+                onChange={(event) => setBase(event.target.value)}
+              />
+            </label>
+            <label className="field-stack">
+              <span>花/杠/补分</span>
+              <input
+                inputMode="decimal"
+                value={manualBonus}
+                onChange={(event) => setManualBonus(event.target.value)}
+              />
+            </label>
+            {method === "discard" && (
+              <label className="check-row compact">
+                <input
+                  checked={covered}
+                  onChange={(event) => setCovered(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>包赔整桌</span>
+              </label>
+            )}
+          </div>
+
+          <label className="field-stack">
+            <span>备注</span>
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="买马、封顶、桌规补充"
+            />
+          </label>
+
+          <button
+            className="primary-action"
+            disabled={!winnerId || scorePreview.amount <= 0}
+            onClick={reportWin}
+            type="button"
+          >
+            <Plus size={18} />
+            确认胡牌入账
+          </button>
+        </section>
+      )}
+    </section>
+  );
+}
+
+function DealerQuickPanel({
+  table,
+  onSetDealer,
+}: {
+  table: TableState;
+  onSetDealer: (playerId: string) => void;
+}) {
+  const [dealerId, setDealerId] = useState(table.currentDealerId ?? table.players[0]?.id ?? "");
+
+  useEffect(() => {
+    setDealerId(table.currentDealerId ?? table.players[0]?.id ?? "");
+  }, [table.currentDealerId, table.players]);
+
+  return (
+    <section className="tool-panel">
+      <div className="section-heading">
+        <Settings2 size={18} />
+        <h2>指定庄家</h2>
+      </div>
+      <div className="dealer-setting">
+        <label className="field-stack">
+          <span>庄家</span>
+          <select value={dealerId} onChange={(event) => setDealerId(event.target.value)}>
+            {table.players.map((player) => (
+              <option key={player.id} value={player.id}>
+                {player.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="secondary-action"
+          onClick={() => onSetDealer(dealerId)}
+          type="button"
+        >
+          保存
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1260,7 +1915,7 @@ function TileAnimation() {
   );
 }
 
-function HostScoreWall({
+function HostMahjongTable({
   latestEntryId,
   table,
 }: {
@@ -1270,11 +1925,17 @@ function HostScoreWall({
   const rankedPlayers = table.players
     .slice()
     .sort((a, b) => (table.scores[b.id] ?? 0) - (table.scores[a.id] ?? 0));
-  const leaderId = rankedPlayers[0]?.id;
+  const rankMap = Object.fromEntries(
+    rankedPlayers.map((player, index) => [player.id, index + 1]),
+  ) as Record<string, number>;
 
   return (
-    <section className="host-score-wall">
-      {rankedPlayers.map((player, index) => {
+    <section className="host-table-stage" key={latestEntryId ?? "host-table"}>
+      <div className="host-table-felt">
+        <strong>{profileMap[table.profileId].shortName}</strong>
+        <span>第 {table.handNumber} 局</span>
+      </div>
+      {table.players.map((player, index) => {
         const score = table.scores[player.id] ?? 0;
         const delta = score - table.startingScore;
         const isDealer = table.currentDealerId === player.id;
@@ -1282,13 +1943,11 @@ function HostScoreWall({
 
         return (
           <article
-            className={`host-score-card ${player.id === leaderId ? "leader" : ""} ${
-              isDealer ? "dealer" : ""
-            }`}
-            key={`${player.id}-${latestEntryId ?? "initial"}-${score}`}
+            className={`host-seat-card host-seat-${index} ${isDealer ? "dealer" : ""}`}
+            key={player.id}
           >
-            <div className="host-score-top">
-              <span className="rank-badge">{index + 1}</span>
+            <div className="host-seat-top">
+              <span className="rank-badge">{rankMap[player.id]}</span>
               <span className="tile-badge">{player.marker}</span>
               {isDealer && <span className="dealer-badge">庄</span>}
             </div>
@@ -1297,7 +1956,7 @@ function HostScoreWall({
               <p>{player.seat}位</p>
             </div>
             <strong>{formatScore(score)}</strong>
-            <div className="host-card-footer">
+            <div className="host-seat-footer">
               <span className={delta >= 0 ? "positive-text" : "negative-text"}>
                 {formatDelta(delta)}
               </span>
@@ -1312,6 +1971,16 @@ function HostScoreWall({
       })}
     </section>
   );
+}
+
+function HostScoreWall({
+  latestEntryId,
+  table,
+}: {
+  latestEntryId?: string;
+  table: TableState;
+}) {
+  return <HostMahjongTable latestEntryId={latestEntryId} table={table} />;
 }
 
 function SetupScreen({
@@ -2414,12 +3083,14 @@ function TablePanel({
   profile,
   onReset,
   onRotateDealer,
+  onRotateSeats,
   onSetDealer,
 }: {
   table: TableState;
   profile: ProfileDefinition;
   onReset: () => void;
   onRotateDealer: () => void;
+  onRotateSeats: () => void;
   onSetDealer: (playerId: string) => void;
 }) {
   const [dealerId, setDealerId] = useState(table.currentDealerId ?? table.players[0]?.id ?? "");
@@ -2483,6 +3154,10 @@ function TablePanel({
       </div>
 
       <div className="side-actions">
+        <button className="secondary-action" onClick={onRotateSeats} type="button">
+          <RotateCw size={18} />
+          转座
+        </button>
         <button className="secondary-action" onClick={onRotateDealer} type="button">
           <Shuffle size={18} />
           换庄
